@@ -1,0 +1,11 @@
+name = "secure-worker"
+main = "src/index.js"
+compatibility_date = "2024-10-01"
+
+routes = [
+  { pattern = "tunnel.karce.shop/secure*", zone_name = "karce.shop" }
+]
+
+[[r2_buckets]]
+binding = "FLAGS_BUCKET"      
+bucket_name = "flags"
