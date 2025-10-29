@@ -29,7 +29,7 @@ resource "aws_subnet" "mgmt" {
 }
 
 
-#route table just added
+#route table added
 
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.first.id
