@@ -1,0 +1,16 @@
+# LTM Variables
+vs_name_prefix: "f5testvip"
+irule_name: "f5testvip_irule"
+vs_port: "80"
+irule_body: |
+  when HTTP_REQUEST {
+    HTTP::respond "Hello from Ansible iRule!" content "text/plain"
+    }
+ansible_connection: "local"
+
+# GTM Variables
+gtm_pool_prefix: "f5testvip"
+gtm_pool_lb_mode: "round-robin"
+wideip_domain: "vanguard.com"
+wideip_pool_lb_mode: "round-robin"
+ansible_connection: "local"
