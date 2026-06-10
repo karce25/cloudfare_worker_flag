@@ -1,0 +1,18 @@
+# LTM BIG-IPs
+[bigip]
+dc1test  ansible_host=x.x.x.x  vs_destination=x.x.x.x:80  gtm_server_name=dc1test 
+dc2stest  ansible_host=x.x.x.x  vs_destination=x.x.x.x:80  gtm_server_name=dc2stest 
+dc1sprod  ansible_host=x.x.x.x  vs_destination=x.x.x.x:80  gtm_server_name=dc1sprod
+
+[bigip:vars]
+ansible_user=xxx
+ansible_password=xxx
+
+
+# GTM BIG-IPs
+[gtm]
+dc1gtm  ansible_host=x.x.x.x
+
+[gtm:vars]
+ansible_user=xxx
+ansible_password=xxx
