@@ -1,0 +1,162 @@
+---
+# LTM config
+
+- name: Create Virtual Servers on Multiple BIG-IPs via REST
+  hosts: bigip
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/var.yml
+  tasks:
+    - name: Set VS name based on LTM hostname
+      ansible.builtin.set_fact:
+        vs_name: "{{ vs_name_prefix }}-{{ inventory_hostname }}_{{ vs_port }}"
+
+    - name: Authenticate and get token
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}/mgmt/shared/authn/login"
+        method: POST
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          username: "{{ ansible_user }}"
+          password: "{{ ansible_password }}"
+          loginProviderName: "tmos"
+        status_code: 200
+      register: auth_response
+
+    - name: Set auth token
+      ansible.builtin.set_fact:
+        auth_token: "{{ auth_response.json.token.token }}"
+
+    - name: Create iRule
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}/mgmt/tm/ltm/rule"
+        method: POST
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          X-F5-Auth-Token: "{{ auth_token }}"
+        body_format: json
+        body:
+          name: "{{ irule_name }}"
+          partition: "Common"
+          apiAnonymous: "{{ irule_body }}"
+        status_code: [200, 409]
+      register: irule_result
+
+    - name: Create virtual server
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}/mgmt/tm/ltm/virtual"
+        method: POST
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          X-F5-Auth-Token: "{{ auth_token }}"
+        body_format: json
+        body:
+          name: "{{ vs_name }}"
+          partition: "Common"
+          destination: "{{ vs_destination }}"
+          mask: "255.255.255.255"
+          ipProtocol: "tcp"
+          sourceAddressTranslation:
+            type: "automap"
+          rules:
+            - "/Common/{{ irule_name }}"
+          profiles:
+            - "/Common/http"
+        status_code: [200, 409]
+      register: vs_result
+
+
+#  GTM Configuration
+
+- name: Configure GTM - Virtual Servers, Pools, and Wide-IPs per BIG-IP
+  hosts: gtm
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/var.yml
+  tasks:
+    - name: Authenticate to GTM and get token
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}/mgmt/shared/authn/login"
+        method: POST
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          username: "{{ ansible_user }}"
+          password: "{{ ansible_password }}"
+          loginProviderName: "tmos"
+        status_code: 200
+      register: gtm_auth_response
+
+    - name: Set GTM auth token
+      ansible.builtin.set_fact:
+        gtm_auth_token: "{{ gtm_auth_response.json.token.token }}"
+
+
+    - name: Add Virtual Server to GTM Server
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}/mgmt/tm/gtm/server/~Common~{{ hostvars[item]['gtm_server_name'] }}/virtual-servers"
+        method: POST
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          X-F5-Auth-Token: "{{ gtm_auth_token }}"
+        body_format: json
+        body:
+          name: "{{ vs_name_prefix }}-{{ item }}_{{ vs_port }}"
+          destination: "{{ hostvars[item]['vs_destination'] }}"
+        status_code: [200, 409]
+      loop: "{{ groups['bigip'] }}"
+      loop_control:
+        label: "{{ hostvars[item]['gtm_server_name'] }} → {{ vs_name_prefix }}-{{ item }}_{{ vs_port }}"
+
+
+    - name: Create GTM Pool
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}/mgmt/tm/gtm/pool/a"
+        method: POST
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          X-F5-Auth-Token: "{{ gtm_auth_token }}"
+        body_format: json
+        body:
+          name: "{{ gtm_pool_prefix }}-{{ item }}"
+          partition: "Common"
+          loadBalancingMode: "{{ gtm_pool_lb_mode }}"
+          members:
+            - name: "/Common/{{ hostvars[item]['gtm_server_name'] }}:{{ vs_name_prefix }}-{{ item }}_{{ vs_port }}"
+        status_code: [200, 409]
+      loop: "{{ groups['bigip'] }}"
+      loop_control:
+        label: "{{ gtm_pool_prefix }}-{{ item }}"
+
+
+    - name: Create Wide-IP
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}/mgmt/tm/gtm/wideip/a"
+        method: POST
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          X-F5-Auth-Token: "{{ gtm_auth_token }}"
+        body_format: json
+        body:
+          name: "f5testvip-{{ item }}.{{ wideip_domain }}"
+          partition: "Common"
+          poolLbMode: "{{ wideip_pool_lb_mode }}"
+          pools:
+            - name: "{{ gtm_pool_prefix }}-{{ item }}"
+              partition: "Common"
+        status_code: [200, 409]
+      loop: "{{ groups['bigip'] }}"
+      loop_control:
+        label: "f5testvip-{{ item }}.{{ wideip_domain }}"
