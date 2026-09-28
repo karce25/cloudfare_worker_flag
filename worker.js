@@ -66,5 +66,7 @@ export default {
     
     return new Response("Not found", { status: 404 });
   },
+
+  curl -k -X POST -u 'admin:I3SXs!w8-7wBd0' -H "Content-Type: application/yang-data+json" -d '{"f5-database:name": "F5OS-BACKUP-APPLIANCE1-'"$(date +"%Y-%m-%d")"'"}' https://localhost/api/data/openconfig-system:system/f5-database:database/config-backup
 };
 
